@@ -1,25 +1,113 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <!-- Фон: индиго → фиолетовый по диагонали -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#6366f1"/>
       <stop offset="100%" stop-color="#8b5cf6"/>
     </linearGradient>
-    <linearGradient id="crystal" x1="0" y1="0" x2="0" y2="1">
+
+    <!-- Кристалл: белый → светло-голубой -->
+    <linearGradient id="crystalGrad" x1="0" y1="0" x2="0.3" y2="1">
       <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#f0f6ff"/>
       <stop offset="100%" stop-color="#dbeafe"/>
     </linearGradient>
-    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+
+    <!-- Левая грань кристалла — чуть темнее для объёма -->
+    <linearGradient id="crystalSideGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eef4ff"/>
+      <stop offset="100%" stop-color="#c7d9f5"/>
+    </linearGradient>
+
+    <!-- Правая грань кристалла — светлее -->
+    <linearGradient id="crystalRightGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0ecff"/>
+    </linearGradient>
+
+    <!-- Основание: золото -->
+    <linearGradient id="baseGrad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#fcd34d"/>
       <stop offset="100%" stop-color="#f59e0b"/>
     </linearGradient>
+
+    <!-- Тень под основанием -->
+    <radialGradient id="baseShadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
-  <g filter="url(#soft)">
-    <path d="M128 40 L180 80 L180 168 L128 208 L76 168 L76 80 Z" fill="url(#crystal)" opacity="0.96"/>
-    <path d="M128 40 L128 208 M76 80 L180 168 M180 80 L76 168" stroke="#6366f1" stroke-width="4" opacity="0.35" fill="none"/>
-    <path d="M76 80 L128 118 L180 80" stroke="#6366f1" stroke-width="4" opacity="0.55" fill="none"/>
-    <path d="M76 168 L128 130 L180 168" stroke="#6366f1" stroke-width="4" opacity="0.55" fill="none"/>
-    <text x="128" y="152" text-anchor="middle" font-family="-apple-system,Segoe UI,Arial" font-weight="800" font-size="72" fill="#4f46e5">G</text>
-  </g>
-  <rect x="60" y="200" width="136" height="20" rx="10" fill="url(#base)" opacity="0.85"/>
+
+  <!-- ==================== ФОН ==================== -->
+  <rect x="51" y="51" width="922" height="922" rx="203" fill="url(#bgGrad)"/>
+
+  <!-- Мягкий блик сверху-слева -->
+  <ellipse cx="330" cy="300" rx="380" ry="280" fill="#ffffff" opacity="0.06"/>
+
+  <!-- ==================== КРИСТАЛЛ ==================== -->
+  <!--
+    Координаты шестигранной призмы (вид спереди):
+    Верхний угол:        (512, 250)
+    Верхний правый:      (640, 320)
+    Нижний правый:       (640, 640)
+    Нижний центр:        (512, 700)
+    Нижний левый:        (384, 640)
+    Верхний левый:       (384, 320)
+  -->
+
+  <!-- Основная форма кристалла (центральная грань) -->
+  <path d="M 512 250 L 640 320 L 640 640 L 512 700 L 384 640 L 384 320 Z"
+        fill="url(#crystalGrad)"/>
+
+  <!-- Левая тёмная грань (для объёма) -->
+  <path d="M 512 250 L 384 320 L 384 640 L 512 700 L 512 250 Z"
+        fill="url(#crystalSideGrad)" opacity="0.55"/>
+
+  <!-- Правая грань (светлая) -->
+  <path d="M 512 250 L 640 320 L 640 640 L 512 700 L 512 250 Z"
+        fill="url(#crystalRightGrad)" opacity="0.4"/>
+
+  <!-- ==================== РЁБРА КРИСТАЛЛА ==================== -->
+  <!-- Внешний контур -->
+  <path d="M 512 250 L 640 320 L 640 640 L 512 700 L 384 640 L 384 320 Z"
+        fill="none" stroke="#6366f1" stroke-width="4" opacity="0.55"
+        stroke-linejoin="round"/>
+
+  <!-- Центральное вертикальное ребро -->
+  <line x1="512" y1="250" x2="512" y2="700"
+        stroke="#6366f1" stroke-width="3.5" opacity="0.5"/>
+
+  <!-- Верхние диагональные рёбра (V-образные от верхней точки) -->
+  <line x1="512" y1="250" x2="384" y2="320"
+        stroke="#6366f1" stroke-width="3" opacity="0.45"/>
+  <line x1="512" y1="250" x2="640" y2="320"
+        stroke="#6366f1" stroke-width="3" opacity="0.45"/>
+
+  <!-- Нижние диагональные рёбра -->
+  <line x1="512" y1="700" x2="384" y2="640"
+        stroke="#6366f1" stroke-width="3" opacity="0.45"/>
+  <line x1="512" y1="700" x2="640" y2="640"
+        stroke="#6366f1" stroke-width="3" opacity="0.45"/>
+
+  <!-- Верхние горизонтальные линии граней (создают эффект огранки) -->
+  <line x1="384" y1="440" x2="640" y2="440"
+        stroke="#6366f1" stroke-width="2" opacity="0.22"/>
+
+  <!-- ==================== БУКВА G ==================== -->
+  <text x="512" y="500" text-anchor="middle"
+        font-family="Inter, Manrope, Poppins, -apple-system, 'Segoe UI', Arial, sans-serif"
+        font-size="220" font-weight="900" fill="#4f46e5"
+        letter-spacing="-8">G</text>
+
+  <!-- ==================== ОСНОВАНИЕ ==================== -->
+  <!-- Тень под основанием -->
+  <ellipse cx="512" cy="905" rx="320" ry="25" fill="url(#baseShadow)"/>
+
+  <!-- Золотая полоса -->
+  <rect x="230" y="860" width="564" height="82" rx="41" fill="url(#baseGrad)"/>
+
+  <!-- Блик на золоте -->
+  <rect x="260" y="872" width="200" height="14" rx="7"
+        fill="#ffffff" opacity="0.25"/>
 </svg>
