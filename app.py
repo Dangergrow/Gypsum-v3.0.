@@ -2,23 +2,40 @@
 Gypsum — калькулятор изделий и библиотека знаний.
 Автор: Камашев В.Е.
 Версия: 3.0
+Поддерживает запуск как из исходников, так и в виде собранного .exe (PyInstaller).
 """
+import sys
 import webview
 import sqlite3
 import json
 import os
-import shutil
 from pathlib import Path
 from datetime import datetime
 
-BASE = Path(__file__).parent
-DB_PATH = BASE / 'gypsum.db'
+
+# ============================================================
+# ПУТИ (работают и как скрипт, и как .exe)
+# ============================================================
+if getattr(sys, 'frozen', False):
+    # Собрано в .exe — файлы данных лежат во временной папке PyInstaller
+    BASE = Path(sys._MEIPASS)
+    USER_BASE = Path(sys.executable).parent
+else:
+    # Запуск из исходников — всё рядом со скриптом
+    BASE = Path(__file__).parent
+    USER_BASE = BASE
+
 HTML_PATH = BASE / 'index.html'
 LIBRARY_PATH = BASE / 'library.json'
-BACKUP_DIR = BASE / 'backups'
+
+DB_PATH = USER_BASE / 'gypsum.db'
+BACKUP_DIR = USER_BASE / 'backups'
 BACKUP_DIR.mkdir(exist_ok=True)
 
 
+# ============================================================
+# БАЗА ДАННЫХ
+# ============================================================
 def get_conn():
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -189,12 +206,13 @@ def init_db():
 def load_library():
     """Загружает библиотеку из json + применяет правки из БД."""
     if not LIBRARY_PATH.exists():
+        print(f'⚠ library.json не найден: {LIBRARY_PATH}')
         return {'categories': []}
     try:
         with open(LIBRARY_PATH, 'r', encoding='utf-8') as f:
             lib = json.load(f)
     except Exception as e:
-        print(f'Ошибка чтения library.json: {e}')
+        print(f'⚠ Ошибка чтения library.json: {e}')
         return {'categories': []}
 
     conn = get_conn()
@@ -219,6 +237,9 @@ def load_library():
     return lib
 
 
+# ============================================================
+# API
+# ============================================================
 class Api:
     # ---------------- SETTINGS ----------------
     def get_settings(self):
@@ -562,6 +583,9 @@ class Api:
                 for f in files]
 
 
+# ============================================================
+# ЗАПУСК
+# ============================================================
 if __name__ == '__main__':
     init_db()
     api = Api()
