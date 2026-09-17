@@ -1334,48 +1334,55 @@ function recalculate(f){
   renderMargin(f, r.total);
 }
 
-/* ---------- НАЦЕНКА (с сохранением фокуса и позиции курсора) ---------- */
+/* ===================================================================
+   НАЦЕНКА И ЦЕНА ПРОДАЖИ
+   Разметка блока создаётся ОДИН РАЗ (флаг data-rendered).
+   При последующих пересчётах обновляются только значения — input
+   не пересоздаётся, поэтому фокус и позиция курсора сохраняются.
+=================================================================== */
 function renderMargin(f, cost){
   const block = $('#margin-block');
   if (!block) return;
 
-  // Сохраняем фокус и позицию курсора ДО перерисовки
-  const active = document.activeElement;
-  const wasFocused = active && active.id === 'mb-markup';
-  const selStart = wasFocused ? active.selectionStart : 0;
-  const selEnd = wasFocused ? active.selectionEnd : 0;
+  if (!block.hasAttribute('data-rendered')){
+    block.setAttribute('data-rendered', '1');
+    const markup = f.markup ?? 50;
+    block.innerHTML = `
+      <div class="mb-title">Наценка и цена продажи</div>
+      <div class="mb-row"><span>Себестоимость</span><span class="v" id="mb-cost">0 ₽</span></div>
+      <div class="mb-input">
+        <input type="number" min="0" step="5" id="mb-markup" value="${markup}">
+        <span style="align-self:center;color:var(--text-3);font-size:13px;font-weight:600">% наценка</span>
+      </div>
+      <div class="mb-row"><span>Прибыль</span><span class="v" id="mb-profit" style="color:var(--success)">+ 0 ₽</span></div>
+      <div class="mb-row highlight"><span>Цена продажи</span><span class="v" id="mb-price">0 ₽</span></div>
+      <button class="btn btn-secondary btn-sm" id="mb-copy" style="width:100%;justify-content:center;margin-top:10px">Скопировать цену</button>
+    `;
+    $('#mb-markup').addEventListener('input', e => {
+      f.markup = num(e.target.value);
+      const curCost = computeBreakdown(f).total;
+      updateMarginValues(f, curCost);
+      autosaveDraft(f);
+      markDirty();
+    });
+    $('#mb-copy').onclick = () => {
+      const curCost = computeBreakdown(f).total;
+      const markup = f.markup ?? 50;
+      const price = curCost * (1 + markup/100);
+      copyText(String(Math.round(price)));
+    };
+  }
 
+  updateMarginValues(f, cost);
+}
+
+function updateMarginValues(f, cost){
   const markup = f.markup ?? 50;
   const price = cost * (1 + markup/100);
   const profit = price - cost;
-
-  block.innerHTML = `
-    <div class="mb-title">Наценка и цена продажи</div>
-    <div class="mb-row"><span>Себестоимость</span><span class="v">${fmt(cost)} ₽</span></div>
-    <div class="mb-input">
-      <input type="number" min="0" step="5" id="mb-markup" value="${markup}">
-      <span style="align-self:center;color:var(--text-3);font-size:13px;font-weight:600">% наценка</span>
-    </div>
-    <div class="mb-row"><span>Прибыль</span><span class="v" style="color:var(--success)">+ ${fmt(profit)} ₽</span></div>
-    <div class="mb-row highlight"><span>Цена продажи</span><span class="v">${fmt(price)} ₽</span></div>
-    <button class="btn btn-secondary btn-sm" id="mb-copy" style="width:100%;justify-content:center;margin-top:10px">Скопировать цену</button>
-  `;
-
-  const markupInput = $('#mb-markup');
-  markupInput.addEventListener('input', e => {
-    f.markup = num(e.target.value);
-    renderMargin(f, cost);
-    autosaveDraft(f);
-    markDirty();
-  });
-
-  $('#mb-copy').onclick = () => copyText(String(Math.round(price)));
-
-  // Восстанавливаем фокус и позицию курсора
-  if (wasFocused){
-    markupInput.focus();
-    try { markupInput.setSelectionRange(selStart, selEnd); } catch(e){}
-  }
+  const c  = $('#mb-cost');   if (c)  c.textContent  = fmt(cost) + ' ₽';
+  const p  = $('#mb-profit'); if (p)  p.textContent  = '+ ' + fmt(profit) + ' ₽';
+  const pr = $('#mb-price');  if (pr) pr.textContent = fmt(price) + ' ₽';
 }
 
 const autosaveDraft = debounce(f => {
