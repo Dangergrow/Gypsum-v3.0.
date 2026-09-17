@@ -11,6 +11,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0f172a)](#-установка)
 [![License](https://img.shields.io/badge/License-MIT-10b981)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-3.0-f59e0b)](#-история-версий)
+[![GitHub](https://img.shields.io/badge/GitHub-Dangergrow-181717?logo=github)](https://github.com/Dangergrow)
 
 </div>
 
@@ -106,7 +107,7 @@
 
 ```bash
 # 1. Клонировать репозиторий
-git clone https://github.com/USERNAME/gypsum.git
+git clone https://github.com/Dangergrow/gypsum.git
 cd gypsum
 
 # 2. Установить зависимости
@@ -118,7 +119,7 @@ python app.py
 
 ### Способ 2 — готовая сборка
 
-1. Скачайте `Gypsum.exe` из [Releases](https://github.com/USERNAME/gypsum/releases)
+1. Скачайте `Gypsum.exe` из [Releases](https://github.com/Dangergrow/gypsum/releases)
 2. Поместите `.exe` в отдельную папку
 3. Запустите двойным кликом
 
@@ -331,7 +332,7 @@ gypsum/
 - [ ] Расширенная аналитика с графиками за период
 - [ ] Плагины для дополнительных материалов (керамика, воск)
 
-Хотите что-то ещё? [Откройте issue](https://github.com/USERNAME/gypsum/issues).
+Хотите что-то ещё? [Откройте issue](https://github.com/Dangergrow/gypsum/issues).
 
 ---
 
@@ -356,7 +357,7 @@ Pull request'ы приветствуются! Перед крупными изм
 
 ## 👤 Автор
 
-**Камашев В.Е.**
+**Камашев В.Е.** · [@Dangergrow](https://github.com/Dangergrow)
 
 Проект сделан для личного использования, но открыт для всех.
 
