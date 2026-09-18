@@ -376,7 +376,7 @@ a:hover{color:var(--accent-hover)}
         <button class="theme-btn" data-theme-set="nord" title="Nord"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></svg></button>
         <button class="theme-btn" data-theme-set="plum" title="Plum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg></button>
       </div>
-      <div class="sidebar-meta"><span id="author-label">Камашев В.Е.</span><span>v3.0</span></div>
+      <div class="sidebar-meta"><span id="author-label">Камашев В.Е.</span><span>v4.0</span></div>
     </div>
   </aside>
 
@@ -931,7 +931,7 @@ async function openProject(id){
 }
 
 /* ===================================================================
-   ФОРМЫ
+   ФОРМЫ РАСЧЁТА
 =================================================================== */
 function defaultForm(type){
   const s = state.settings;
@@ -940,7 +940,7 @@ function defaultForm(type){
     waste_pct:num(s.default_waste)||5, labor_hours:0, labor_rate:num(s.labor_rate)||500,
     electricity_kwh:0, electricity_rate:num(s.electricity_rate)||6,
     amort_hours:0, amort_rate:num(s.amort_rate)||20,
-    packaging:0, decor:[], markup:num(s.default_markup)||50,
+    packaging:0, decor:[], additives:[], markup:num(s.default_markup)||50,
   };
   if (type==='gypsum') return {...base, gypsum_id:null, gypsum_kg:1, water_ml:0, water_auto:true, water_price_per_l:0};
   if (type==='resin')  return {...base, resin_a_id:null, resin_a_g:100, resin_b_id:null, resin_b_g:50, ab_ratio:2};
@@ -1008,6 +1008,7 @@ function renderCalcPage(type){
         ${type==='gypsum'  ? gypsumFields(form) : ''}
         ${type==='resin'   ? resinFields(form)  : ''}
         ${type==='print3d' ? print3dFields(form): ''}
+        ${additivesCard(form, type)}
         ${commonFields(form)}
         ${decorCard(form)}
       </div>
@@ -1030,8 +1031,9 @@ function renderCalcPage(type){
     </div>
   `;
 
-  bindForm(form);
+  bindForm(form, type);
   renderDecorList(form);
+  renderAdditivesList(form, type);
   recalculate(form);
 
   $('#top-save').onclick = $('#save-btn').onclick = saveProject;
@@ -1129,6 +1131,26 @@ function print3dFields(f){
   `;
 }
 
+function additivesCard(f, type){
+  const catMap = { gypsum: 'gypsum_additive', resin: 'resin_additive', print3d_fdm: 'fdm_additive', print3d_sla: 'sla_additive' };
+  let cat = '';
+  if (type === 'gypsum') cat = 'gypsum_additive';
+  else if (type === 'resin') cat = 'resin_additive';
+  else if (type === 'print3d') cat = (f.sub === 'fdm') ? 'fdm_additive' : 'sla_additive';
+
+  const opts = state.materials.filter(m => m.category === cat).map(m => `<option value="${m.id}">${esc(m.name)} · ${m.price} ₽/${m.unit}</option>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Добавки</div><div class="card-desc">Пеногасители, пластификаторы, пигменты и т.д.</div></div>
+        <button class="btn btn-secondary btn-sm" id="add-additive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Добавить добавку</button>
+      </div>
+      <div class="decor-list" id="additives-list"></div>
+    </div>
+  `;
+}
+
 function commonFields(f){
   return `
     <div class="card">
@@ -1163,54 +1185,60 @@ function decorCard(f){
   `;
 }
 
-function bindForm(f){
+function bindForm(f, type){
   const inp = (id, cb) => { const el = document.getElementById(id); if (el) el.addEventListener('input', e => { cb(e.target.value); recalculate(f); autosaveDraft(f); markDirty(); }); };
   const chg = (id, cb) => { const el = document.getElementById(id); if (el) el.addEventListener('change', e => { cb(e.target.value); recalculate(f); autosaveDraft(f); markDirty(); }); };
 
   inp('f-name', v => f.name = v);
   inp('f-qty', v => f.quantity = Math.max(1, parseInt(v)||1));
 
-  chg('f-gypsum-id', v => {
-    f.gypsum_id = +v;
-    const m = state.materials.find(x=>x.id===f.gypsum_id);
-    if (m && f.water_auto){ const r = m.meta?.water_ratio ?? 0.7; f.water_ml = f.gypsum_kg*1000*r; const wi=$('#f-water'); if(wi) wi.value = Math.round(f.water_ml); }
-  });
-  inp('f-gypsum-kg', v => {
-    f.gypsum_kg = num(v);
-    if (f.water_auto){ const m = state.materials.find(x=>x.id===f.gypsum_id); const r = m?.meta?.water_ratio ?? 0.7; f.water_ml = f.gypsum_kg*1000*r; const wi=$('#f-water'); if(wi) wi.value = Math.round(f.water_ml); }
-  });
-  inp('f-water', v => { f.water_ml = num(v); f.water_auto = false; });
-  inp('f-water-price', v => f.water_price_per_l = num(v));
-  $('#water-toggle')?.addEventListener('click', e => {
-    e.preventDefault();
-    f.water_auto = !f.water_auto;
-    const wi = $('#f-water');
-    if (f.water_auto){
+  if (type === 'gypsum'){
+    chg('f-gypsum-id', v => {
+      f.gypsum_id = +v;
       const m = state.materials.find(x=>x.id===f.gypsum_id);
-      const r = m?.meta?.water_ratio ?? 0.7;
-      f.water_ml = f.gypsum_kg*1000*r; wi.value = Math.round(f.water_ml); wi.readOnly = true;
-      e.target.textContent = 'Изменить вручную';
-    } else { wi.readOnly = false; e.target.textContent = 'Вернуть авто'; wi.focus(); }
-    recalculate(f); markDirty();
-  });
+      if (m && f.water_auto){ const r = m.meta?.water_ratio ?? 0.7; f.water_ml = f.gypsum_kg*1000*r; const wi=$('#f-water'); if(wi) wi.value = Math.round(f.water_ml); }
+    });
+    inp('f-gypsum-kg', v => {
+      f.gypsum_kg = num(v);
+      if (f.water_auto){ const m = state.materials.find(x=>x.id===f.gypsum_id); const r = m?.meta?.water_ratio ?? 0.7; f.water_ml = f.gypsum_kg*1000*r; const wi=$('#f-water'); if(wi) wi.value = Math.round(f.water_ml); }
+    });
+    inp('f-water', v => { f.water_ml = num(v); f.water_auto = false; });
+    inp('f-water-price', v => f.water_price_per_l = num(v));
+    $('#water-toggle')?.addEventListener('click', e => {
+      e.preventDefault();
+      f.water_auto = !f.water_auto;
+      const wi = $('#f-water');
+      if (f.water_auto){
+        const m = state.materials.find(x=>x.id===f.gypsum_id);
+        const r = m?.meta?.water_ratio ?? 0.7;
+        f.water_ml = f.gypsum_kg*1000*r; wi.value = Math.round(f.water_ml); wi.readOnly = true;
+        e.target.textContent = 'Изменить вручную';
+      } else { wi.readOnly = false; e.target.textContent = 'Вернуть авто'; wi.focus(); }
+      recalculate(f); markDirty();
+    });
+  }
 
-  chg('f-ra-id', v => f.resin_a_id = +v);
-  inp('f-ra-g', v => { f.resin_a_g = num(v); f.resin_b_g = Math.round(f.resin_a_g/(f.ab_ratio||1)*10)/10; const e=$('#f-rb-g'); if(e) e.value = f.resin_b_g; });
-  inp('f-ab-ratio', v => { f.ab_ratio = num(v); f.resin_b_g = Math.round(f.resin_a_g/(f.ab_ratio||1)*10)/10; const e=$('#f-rb-g'); if(e) e.value = f.resin_b_g; });
-  chg('f-rb-id', v => f.resin_b_id = +v);
-  inp('f-rb-g', v => f.resin_b_g = num(v));
+  if (type === 'resin'){
+    chg('f-ra-id', v => f.resin_a_id = +v);
+    inp('f-ra-g', v => { f.resin_a_g = num(v); f.resin_b_g = Math.round(f.resin_a_g/(f.ab_ratio||1)*10)/10; const e=$('#f-rb-g'); if(e) e.value = f.resin_b_g; });
+    inp('f-ab-ratio', v => { f.ab_ratio = num(v); f.resin_b_g = Math.round(f.resin_a_g/(f.ab_ratio||1)*10)/10; const e=$('#f-rb-g'); if(e) e.value = f.resin_b_g; });
+    chg('f-rb-id', v => f.resin_b_id = +v);
+    inp('f-rb-g', v => f.resin_b_g = num(v));
+  }
 
-  $$('#print3d-switch button').forEach(b => b.onclick = ()=>{
-    f.sub = b.dataset.sub; state.print3dSub = f.sub; markDirty();
-    renderCalcPage('print3d');
-  });
-  chg('f-fdm-id', v => f.fdm_id = +v);
-  inp('f-fdm-g', v => f.fdm_g = num(v));
-  chg('f-sla-id', v => f.sla_id = +v);
-  inp('f-sla-ml', v => f.sla_ml = num(v));
-  const updateEl = () => { f.electricity_kwh = Math.round((f.printer_power*f.print_hours/1000)*100)/100; const e=$('#f-el-kwh'); if(e) e.value = f.electricity_kwh; };
-  inp('f-print-hours', v => { f.print_hours = num(v); updateEl(); });
-  inp('f-power', v => { f.printer_power = num(v); updateEl(); });
+  if (type === 'print3d'){
+    $$('#print3d-switch button').forEach(b => b.onclick = ()=>{
+      f.sub = b.dataset.sub; state.print3dSub = f.sub; markDirty();
+      renderCalcPage('print3d');
+    });
+    chg('f-fdm-id', v => f.fdm_id = +v);
+    inp('f-fdm-g', v => f.fdm_g = num(v));
+    chg('f-sla-id', v => f.sla_id = +v);
+    inp('f-sla-ml', v => f.sla_ml = num(v));
+    const updateEl = () => { f.electricity_kwh = Math.round((f.printer_power*f.print_hours/1000)*100)/100; const e=$('#f-el-kwh'); if(e) e.value = f.electricity_kwh; };
+    inp('f-print-hours', v => { f.print_hours = num(v); updateEl(); });
+    inp('f-power', v => { f.printer_power = num(v); updateEl(); });
+  }
 
   const simple = {
     'f-waste': v => f.waste_pct = num(v),
@@ -1224,10 +1252,67 @@ function bindForm(f){
   };
   Object.entries(simple).forEach(([id, cb]) => inp(id, cb));
 
+  $('#add-additive').onclick = ()=>{
+    f.additives.push({name:'', qty:0, unit:'г', price:0});
+    renderAdditivesList(f, type); recalculate(f); autosaveDraft(f); markDirty();
+  };
+
   $('#add-decor').onclick = ()=>{
     f.decor.push({name:'', qty:1, unit:'шт', price:0});
     renderDecorList(f); recalculate(f); autosaveDraft(f); markDirty();
   };
+}
+
+function renderAdditivesList(f, type){
+  const box = $('#additives-list');
+  if (!box) return;
+  const catMap = { gypsum: 'gypsum_additive', resin: 'resin_additive', fdm: 'fdm_additive', sla: 'sla_additive' };
+  let cat = '';
+  if (type === 'gypsum') cat = catMap.gypsum;
+  else if (type === 'resin') cat = catMap.resin;
+  else if (type === 'print3d') cat = (f.sub === 'fdm') ? catMap.fdm : catMap.sla;
+
+  const opts = state.materials.filter(m => m.category === cat).map(m => `<option value="${m.id}">${esc(m.name)} · ${m.price} ₽/${m.unit}</option>`).join('');
+
+  if (!f.additives || !f.additives.length){
+    box.innerHTML = `<div style="color:var(--text-3);font-size:12.5px;padding:10px 4px;text-align:center">Пока нет добавок — нажмите «Добавить добавку»</div>`;
+    return;
+  }
+
+  box.innerHTML = f.additives.map((a,i)=>`
+    <div class="decor-row" data-idx="${i}">
+      <select class="select" data-k="name">${opts || '<option>— нет —</option>'}</select>
+      <input class="input" data-k="qty" type="number" step="0.1" min="0" placeholder="Кол-во" value="${a.qty}">
+      <select class="select" data-k="unit">${['г','кг','мл','л','шт','%'].map(u=>`<option ${u===a.unit?'selected':''}>${u}</option>`).join('')}</select>
+      <input class="input" data-k="price" type="number" step="0.1" min="0" placeholder="₽/ед" value="${a.price}">
+      <button class="icon-btn" data-del-additive title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>`).join('');
+
+  box.querySelectorAll('.decor-row').forEach(row => {
+    const i = +row.dataset.idx;
+    const sel = row.querySelector('[data-k="name"]');
+    if (sel && f.additives[i].name) {
+      const found = state.materials.find(m => m.name === f.additives[i].name);
+      if (found) sel.value = found.id;
+    }
+    sel.onchange = () => {
+      const m = state.materials.find(x => x.id === +sel.value);
+      if (m) { f.additives[i].name = m.name; f.additives[i].price = m.price; f.additives[i].unit = m.unit; }
+      const p = row.querySelector('[data-k="price"]'); if (p) p.value = f.additives[i].price;
+      recalculate(f); markDirty();
+    };
+    row.querySelectorAll('[data-k]').forEach(inp => {
+      if (inp === sel) return;
+      inp.oninput = inp.onchange = () => {
+        const k = inp.dataset.k;
+        f.additives[i][k] = (k==='unit') ? inp.value : num(inp.value);
+        recalculate(f); autosaveDraft(f); markDirty();
+      };
+    });
+    row.querySelector('[data-del-additive]').onclick = ()=>{
+      f.additives.splice(i,1); renderAdditivesList(f, type); recalculate(f); autosaveDraft(f); markDirty();
+    };
+  });
 }
 
 function renderDecorList(f){
@@ -1268,8 +1353,10 @@ function computeBreakdown(f){
   const m = id => state.materials.find(x=>x.id===id);
   const lines = [];
   let materialCost = 0;
+  let additiveCost = 0;
   const qty = Math.max(1, parseInt(f.quantity) || 1);
 
+  // Основной материал
   if ('gypsum_id' in f){
     const g = m(f.gypsum_id);
     if (g){
@@ -1298,13 +1385,21 @@ function computeBreakdown(f){
     if (sm){ const c = f.sla_ml*qty*num(sm.price)*(1+f.waste_pct/100); materialCost += c; lines.push({ label: `${sm.name} · ${f.sla_ml*qty} мл`, val: c }); }
   }
 
+  // Добавки
+  (f.additives||[]).forEach(a => {
+    if (!a.name || !a.qty) return;
+    const c = num(a.qty) * qty * num(a.price);
+    additiveCost += c;
+    lines.push({ label: `${a.name} · ${a.qty*qty} ${a.unit}`, val: c });
+  });
+
   const decorCost = (f.decor||[]).reduce((s,d)=>s + num(d.qty)*num(d.price), 0) * qty;
   const labor = f.labor_hours * qty * f.labor_rate;
   const el = f.electricity_kwh * qty * f.electricity_rate;
   const amort = f.amort_hours * qty * f.amort_rate;
   const pack = f.packaging * qty;
-  const total = materialCost + decorCost + labor + el + amort + pack;
-  return { lines, materialCost, decorCost, labor, el, amort, pack, total, qty };
+  const total = materialCost + additiveCost + decorCost + labor + el + amort + pack;
+  return { lines, materialCost, additiveCost, decorCost, labor, el, amort, pack, total, qty };
 }
 
 function recalculate(f){
@@ -1334,12 +1429,6 @@ function recalculate(f){
   renderMargin(f, r.total);
 }
 
-/* ===================================================================
-   НАЦЕНКА И ЦЕНА ПРОДАЖИ
-   Разметка блока создаётся ОДИН РАЗ (флаг data-rendered).
-   При последующих пересчётах обновляются только значения — input
-   не пересоздаётся, поэтому фокус и позиция курсора сохраняются.
-=================================================================== */
 function renderMargin(f, cost){
   const block = $('#margin-block');
   if (!block) return;
@@ -1437,6 +1526,7 @@ function exportPDF(){
     if (sm) rows.push(['Фотополимер: '+sm.name, `${f.sla_ml*qty} мл`, `${fmt(f.sla_ml*qty*num(sm.price))} ₽`]);
     rows.push(['Время печати', `${f.print_hours*qty} ч`, '']);
   }
+  (f.additives||[]).forEach(a => { if (a.name && a.qty) rows.push([a.name, `${a.qty*qty} ${a.unit}`, `${fmt(num(a.qty)*num(a.price)*qty)} ₽`]); });
   (f.decor||[]).forEach(d => { if (d.name) rows.push([d.name, `${d.qty*qty} ${d.unit}`, `${fmt(num(d.qty)*num(d.price)*qty)} ₽`]); });
   if (f.labor_hours)   rows.push(['Работа', `${f.labor_hours*qty} ч × ${f.labor_rate} ₽`, `${fmt(f.labor_hours*qty*f.labor_rate)} ₽`]);
   if (f.electricity_kwh) rows.push(['Электроэнергия', `${(f.electricity_kwh*qty).toFixed(2)} кВт·ч`, `${fmt(f.electricity_kwh*qty*f.electricity_rate)} ₽`]);
@@ -1449,7 +1539,7 @@ function exportPDF(){
 
   $('#print-area').innerHTML = `
     <h1>${esc(f.name)}</h1>
-    <div class="p-sub">${typeLabel} · Количество: ${qty} шт · ${new Date().toLocaleString('ru-RU')} · Gypsum v3.0 (${esc(state.settings.author||'Камашев В.Е.')})</div>
+    <div class="p-sub">${typeLabel} · Количество: ${qty} шт · ${new Date().toLocaleString('ru-RU')} · Gypsum v4.0 (${esc(state.settings.author||'Камашев В.Е.')})</div>
     <h2>Состав сметы</h2>
     <table>
       <thead><tr><th>Позиция</th><th>Количество</th><th style="text-align:right">Стоимость</th></tr></thead>
@@ -2062,7 +2152,7 @@ function supplierDialog(s){
 /* ===================================================================
    СПРАВОЧНИК
 =================================================================== */
-const CATEGORIES = { gypsum:'Гипс', resin_a:'Смола A', resin_b:'Отвердитель B', fdm:'Филамент FDM', sla:'Фотополимер SLA', decor:'Декор', other:'Прочее' };
+const CATEGORIES = { gypsum:'Гипс', gypsum_additive:'Добавки для гипса', resin_a:'Смола A', resin_b:'Отвердитель B', resin_additive:'Добавки для смолы', fdm:'Филамент FDM', fdm_additive:'Добавки для FDM', sla:'Фотополимер SLA', sla_additive:'Добавки для SLA', decor:'Декор', other:'Прочее' };
 let catalogQuery = '';
 let catalogFavOnly = false;
 
@@ -2171,7 +2261,7 @@ function bulkPriceDialog(){
   };
 }
 function matDialog(id){
-  const m = id ? state.materials.find(x=>x.id===id) : {name:'', category:'gypsum', unit:'kg', price:0, stock:0, stock_min:0, meta:{}, favorite:0};
+  const m = id ? state.materials.find(x=>x.id===id) : {name:'', category:'gypsum', unit:'kg', price:0, price_unit:'unit', stock:0, stock_min:0, meta:{}, favorite:0};
   const isNew = !id;
   openModal(`
     <div class="modal-head"><div class="card-title">${isNew ? 'Новый материал' : 'Редактирование'}</div><button class="icon-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
@@ -2245,7 +2335,7 @@ async function renderSettingsPage(){
       <div class="card-header"><div><div class="card-title">О программе</div></div></div>
       <div style="display:grid;gap:8px;font-size:13.5px">
         <div class="flex-between"><span class="muted">Название</span><b>Gypsum</b></div>
-        <div class="flex-between"><span class="muted">Версия</span><b>3.0</b></div>
+        <div class="flex-between"><span class="muted">Версия</span><b>4.0</b></div>
         <div class="flex-between"><span class="muted">Автор</span><b>Камашев В.Е.</b></div>
         <div class="flex-between"><span class="muted">База данных</span><b>SQLite</b></div>
         <div class="flex-between"><span class="muted">Библиотека</span><b>${state.library.categories ? state.library.categories.reduce((s,c)=>s+c.articles.length,0) : 0} статей</b></div>
