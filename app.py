@@ -1,7 +1,7 @@
 """
 Gypsum — калькулятор изделий и библиотека знаний.
 Автор: Камашев В.Е.
-Версия: 3.0
+Версия: 4.0
 Поддерживает запуск из исходников и как .exe (PyInstaller).
 """
 import sys
@@ -44,6 +44,7 @@ def init_db():
             category TEXT NOT NULL,
             unit TEXT NOT NULL,
             price REAL NOT NULL DEFAULT 0,
+            price_unit TEXT DEFAULT 'unit',
             stock REAL DEFAULT 0,
             stock_min REAL DEFAULT 0,
             supplier_id INTEGER,
@@ -96,6 +97,7 @@ def init_db():
         'labor_rate': '500', 'electricity_rate': '6', 'printer_power': '150',
         'default_waste': '5', 'amort_rate': '20', 'default_markup': '50',
         'theme': 'light', 'author': 'Камашев В.Е.', 'currency': '₽',
+        'marketplace_fee': '15', 'tax_rate': '6',
     }
     for k, v in defaults.items():
         c.execute('INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)', (k, v))
@@ -103,34 +105,50 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM materials")
     if c.fetchone()[0] == 0:
         seed = [
-            ('Гипс строительный Г-16','gypsum','kg',45,{'water_ratio':0.7,'loss':5},1),
-            ('Гипс скульптурный','gypsum','kg',90,{'water_ratio':0.6,'loss':3},1),
-            ('Гипс формовочный','gypsum','kg',120,{'water_ratio':0.5,'loss':3},0),
-            ('Гипс стоматологический','gypsum','kg',340,{'water_ratio':0.4,'loss':2},0),
-            ('Смола эпоксидная A','resin_a','g',1.2,{},1),
-            ('Смола полиуретановая A','resin_a','g',1.8,{},0),
-            ('Смола полиэстеровая A','resin_a','g',0.9,{},0),
-            ('Отвердитель B','resin_b','g',1.5,{},1),
-            ('Смола UV (фотополимер)','sla','ml',8,{},1),
-            ('Смола водоразбавляемая','sla','ml',12,{},0),
-            ('Филамент PLA','fdm','g',2.5,{},1),
-            ('Филамент PETG','fdm','g',3.0,{},0),
-            ('Филамент ABS','fdm','g',2.8,{},0),
-            ('Филамент TPU (гибкий)','fdm','g',4.5,{},0),
-            ('Филамент Nylon','fdm','g',5.5,{},0),
-            ('Бисер стеклянный','decor','g',3.0,{},0),
-            ('Кабошоны стеклянные','decor','piece',15,{},0),
-            ('Клей-момент','decor','g',0.9,{},0),
-            ('Краска акриловая','decor','ml',2.0,{},0),
-            ('Пигмент сухой','decor','g',4.5,{},0),
-            ('Пигмент жидкий','decor','ml',3.5,{},0),
-            ('Патина (битум)','decor','ml',4.0,{},0),
-            ('Лак акриловый матовый','decor','ml',2.5,{},0),
-            ('Лак акриловый глянцевый','decor','ml',2.5,{},0),
-            ('Силикон платиновый','other','g',3.5,{},0),
-            ('Силикон оловянный','other','g',2.0,{},0),
-            ('Воск разделительный','other','ml',5.0,{},0),
-            ('Спрей-разделитель','other','ml',3.5,{},0),
+            # Гипс и добавки
+            ('Гипс строительный Г-16', 'gypsum', 'kg', 45, {'water_ratio': 0.7, 'loss': 5}, 1),
+            ('Гипс скульптурный', 'gypsum', 'kg', 90, {'water_ratio': 0.6, 'loss': 3}, 1),
+            ('Гипс формовочный', 'gypsum', 'kg', 120, {'water_ratio': 0.5, 'loss': 3}, 0),
+            ('Пеногаситель для гипса', 'gypsum_additive', 'g', 5.0, {}, 0),
+            ('Пластификатор для гипса', 'gypsum_additive', 'g', 4.0, {}, 0),
+            ('Замедлитель схватывания', 'gypsum_additive', 'g', 6.0, {}, 0),
+            ('Ускоритель схватывания', 'gypsum_additive', 'g', 7.0, {}, 0),
+            ('Армирующее волокно', 'gypsum_additive', 'g', 3.0, {}, 0),
+            # Смолы и добавки
+            ('Смола эпоксидная A', 'resin_a', 'g', 1.2, {}, 1),
+            ('Смола полиуретановая A', 'resin_a', 'g', 1.8, {}, 0),
+            ('Смола полиэстеровая A', 'resin_a', 'g', 0.9, {}, 0),
+            ('Отвердитель B', 'resin_b', 'g', 1.5, {}, 1),
+            ('Ускоритель для смолы', 'resin_additive', 'g', 8.0, {}, 0),
+            ('Пластификатор для смолы', 'resin_additive', 'g', 6.0, {}, 0),
+            ('Тиксотропная добавка', 'resin_additive', 'g', 9.0, {}, 0),
+            ('УФ-стабилизатор', 'resin_additive', 'g', 12.0, {}, 0),
+            ('Пигмент для смолы', 'resin_additive', 'g', 5.0, {}, 0),
+            # 3D-печать FDM
+            ('Филамент PLA', 'fdm', 'g', 2.5, {}, 1),
+            ('Филамент PETG', 'fdm', 'g', 3.0, {}, 0),
+            ('Филамент ABS', 'fdm', 'g', 2.8, {}, 0),
+            ('Пигмент для филамента', 'fdm_additive', 'g', 4.0, {}, 0),
+            ('Модификатор адгезии', 'fdm_additive', 'g', 7.0, {}, 0),
+            # 3D-печать SLA
+            ('Смола UV (фотополимер)', 'sla', 'ml', 8, {}, 1),
+            ('Смола водоразбавляемая', 'sla', 'ml', 12, {}, 0),
+            ('УФ-стабилизатор для SLA', 'sla_additive', 'g', 10.0, {}, 0),
+            ('Пигмент для SLA', 'sla_additive', 'g', 6.0, {}, 0),
+            # Декор и прочее
+            ('Бисер стеклянный', 'decor', 'g', 3.0, {}, 0),
+            ('Кабошоны стеклянные', 'decor', 'piece', 15, {}, 0),
+            ('Клей-момент', 'decor', 'g', 0.9, {}, 0),
+            ('Краска акриловая', 'decor', 'ml', 2.0, {}, 0),
+            ('Пигмент сухой', 'decor', 'g', 4.5, {}, 0),
+            ('Пигмент жидкий', 'decor', 'ml', 3.5, {}, 0),
+            ('Патина (битум)', 'decor', 'ml', 4.0, {}, 0),
+            ('Лак акриловый матовый', 'decor', 'ml', 2.5, {}, 0),
+            ('Лак акриловый глянцевый', 'decor', 'ml', 2.5, {}, 0),
+            ('Силикон платиновый', 'other', 'g', 3.5, {}, 0),
+            ('Силикон оловянный', 'other', 'g', 2.0, {}, 0),
+            ('Воск разделительный', 'other', 'ml', 5.0, {}, 0),
+            ('Спрей-разделитель', 'other', 'ml', 3.5, {}, 0),
         ]
         for s in seed:
             c.execute("INSERT INTO materials(name, category, unit, price, meta, favorite) VALUES(?,?,?,?,?,?)",
@@ -141,9 +159,7 @@ def init_db():
         seed_templates = [
             ('Подсвечник классический','gypsum','Простая форма, 250 г гипса, 30 мин работы', json.dumps({'gypsum_kg':0.25,'labor_hours':0.5,'waste_pct':5})),
             ('Панно декоративное (20×20)','gypsum','С армированием, 1.2 кг гипса, 2 ч работы', json.dumps({'gypsum_kg':1.2,'labor_hours':2,'waste_pct':8})),
-            ('Бюст малый','gypsum','Скульптурный гипс, 800 г, 3 ч работы', json.dumps({'gypsum_kg':0.8,'labor_hours':3,'waste_pct':5})),
             ('Кулон-капля','resin','Эпоксидка A 20 г, B 10 г, 30 мин работы', json.dumps({'resin_a_g':20,'resin_b_g':10,'ab_ratio':2,'labor_hours':0.5})),
-            ('Столешница круглая','resin','Эпоксидка A 400 г, B 200 г, 4 ч работы', json.dumps({'resin_a_g':400,'resin_b_g':200,'ab_ratio':2,'labor_hours':4})),
             ('Миниатюра 28мм','sla','UV-смола 3 мл, 1.5 ч печати', json.dumps({'sub':'sla','sla_ml':3,'print_hours':1.5,'printer_power':60})),
             ('Функциональная деталь','fdm','PLA 40 г, 3 ч печати', json.dumps({'sub':'fdm','fdm_g':40,'print_hours':3,'printer_power':150})),
         ]
@@ -210,12 +226,12 @@ class Api:
         meta = json.dumps(data.get('meta', {}))
         fav = 1 if data.get('favorite') else 0
         params = (data['name'], data['category'], data['unit'], float(data['price']),
-                  float(data.get('stock', 0)), float(data.get('stock_min', 0)),
-                  data.get('supplier_id'), meta, fav)
+                  data.get('price_unit', 'unit'), float(data.get('stock', 0)),
+                  float(data.get('stock_min', 0)), data.get('supplier_id'), meta, fav)
         if data.get('id'):
-            conn.execute("UPDATE materials SET name=?, category=?, unit=?, price=?, stock=?, stock_min=?, supplier_id=?, meta=?, favorite=? WHERE id=?", params + (data['id'],))
+            conn.execute("UPDATE materials SET name=?, category=?, unit=?, price=?, price_unit=?, stock=?, stock_min=?, supplier_id=?, meta=?, favorite=? WHERE id=?", params + (data['id'],))
         else:
-            conn.execute("INSERT INTO materials(name, category, unit, price, stock, stock_min, supplier_id, meta, favorite) VALUES(?,?,?,?,?,?,?,?,?)", params)
+            conn.execute("INSERT INTO materials(name, category, unit, price, price_unit, stock, stock_min, supplier_id, meta, favorite) VALUES(?,?,?,?,?,?,?,?,?,?)", params)
         conn.commit(); conn.close(); return {'ok': True}
 
     def toggle_favorite(self, mid):
